@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "name": "playtime.zip",
+  "items": ["playtime.sh", "playtime/"],
+  "items_opt": null,
+  "attr": {
+    "title": "Playtime",
+    "desc": "Check how long it'll take to beat all games on your device",
+    "inst": "Ready to run.",
+    "genres": ["tool"],
+    "porter": ["Amos Jerbi"],
+    "image": {},
+    "rtr": true,
+    "runtime": null,
+    "reqs": [],
+    "arch": ["aarch64", "armhf"]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "ports": {
+    "amos_capture.zip": {},
+    "amos_fetcher.zip": {},
+    "amos_playtime.zip": {}
+  },
+  "releases": [
+    "2026-02-17_0001"
+  ],
+  "release_data": {
+    "2026-02-17_0001": [
+      "amos_capture.zip",
+      "amos_fetcher.zip",
+      "amos_playtime.zip"
+    ]
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "ports": {
+    "amos_capture.zip": {
+      "version": 2,
+      "name": "amos_capture.zip",
+      "items": [
+        "capture.sh",
+        "amos_capture/"
+      ],
+      "items_opt": null,
+      "attr": {
+        "title": "Capture",
+        "desc": "Take screenshots or animated short APngs",
+        "inst": "Ready to run.",
+        "genres": [
+          "other"
+        ],
+        "porter": [
+          "Amos Jerbi"
+        ],
+        "image": {
+          "screenshot": "screenshot.png",
+          "covers": [],
+          "thumbnail": null,
+          "video": null
+        },
+        "rtr": true,
+        "runtime": [],
+        "reqs": [],
+        "arch": [
+          "aarch64",
+          "armhf"
+        ],
+        "desc_md": null,
+        "inst_md": null,
+        "exp": false,
+        "min_glibc": ""
+      },
+      "source": {
+        "date_added": "2026-02-17",
+        "date_updated": "2026-02-17",
+        "md5": "1bcc2e221a68a982595fbd8113d7c335",
+        "release_id": "latest",
+        "size": 2255870,
+        "url": "https://github.com/amosjerbi/PortMaster-New/releases/latest/download/amos_capture.zip"
+      }
+    },
+    "amos_fetcher.zip": {
+      "version": 2,
+      "name": "amos_fetcher.zip",
+      "items": [
+        "fetcher.sh",
+        "amos_fetcher/"
+      ],
+      "items_opt": null,
+      "attr": {
+        "title": "Fetcher",
+        "desc": "Download games you own from platform you choose",
+        "inst": "Ready to run.",
+        "genres": [
+          "other"
+        ],
+        "porter": [
+          "Amos Jerbi"
+        ],
+        "image": {
+          "screenshot": "screenshot.png",
+          "covers": [],
+          "thumbnail": null,
+          "video": null
+        },
+        "rtr": true,
+        "runtime": [],
+        "reqs": [],
+        "arch": [
+          "aarch64",
+          "armhf"
+        ],
+        "desc_md": null,
+        "inst_md": null,
+        "exp": false,
+        "min_glibc": ""
+      },
+      "source": {
+        "date_added": "2026-02-17",
+        "date_updated": "2026-02-17",
+        "md5": "de9ed39aadc1b9119a41848c58906f75",
+        "release_id": "latest",
+        "size": 2203144,
+        "url": "https://github.com/amosjerbi/PortMaster-New/releases/latest/download/amos_fetcher.zip"
+      }
+    },
+    "amos_playtime.zip": {
+      "version": 2,
+      "name": "amos_playtime.zip",
+      "items": [
+        "playtime.sh",
+        "amos_playtime/"
+      ],
+      "items_opt": null,
+      "attr": {
+        "title": "Playtime",
+        "desc": "Check how long it'll take to beat all games on your device",
+        "inst": "Ready to run.",
+        "genres": [
+          "other"
+        ],
+        "porter": [
+          "Amos Jerbi"
+        ],
+        "image": {
+          "screenshot": "screenshot.png",
+          "covers": [],
+          "thumbnail": null,
+          "video": null
+        },
+        "rtr": true,
+        "runtime": [],
+        "reqs": [],
+        "arch": [
+          "aarch64",
+          "armhf"
+        ],
+        "desc_md": null,
+        "inst_md": null,
+        "exp": false,
+        "min_glibc": ""
+      },
+      "source": {
+        "date_added": "2026-02-17",
+        "date_updated": "2026-02-17",
+        "md5": "70b17157251181428ab2c2447ebba1c5",
+        "release_id": "latest",
+        "size": 2195913,
+        "url": "https://github.com/amosjerbi/PortMaster-New/releases/latest/download/amos_playtime.zip"
+      }
+    }
+  },
+  "utils": {
+    "gameinfo.zip": {
+      "name": "gameinfo.zip",
+      "md5": "9ab77e01591e4afa2e1842b855d755c6",
+      "size": 69845,
+      "url": "https://github.com/amosjerbi/PortMaster-New/releases/latest/download/gameinfo.zip"
+    },
+    "images.000.zip": {
+      "name": "images.000.zip",
+      "md5": "dfdfd4ea32bb20c161c5db775046de25",
+      "size": 69040,
+      "url": "https://github.com/amosjerbi/PortMaster-New/releases/latest/download/images.000.zip",
+      "images": [
+        "amos_capture.screenshot.png",
+        "amos_fetcher.screenshot.png",
+        "amos_playtime.screenshot.png"
+      ]
+    },
+    "images.zip": {
+      "name": "images.zip",
+      "md5": "dfdfd4ea32bb20c161c5db775046de25",
+      "size": 69040,
+      "url": "https://github.com/amosjerbi/PortMaster-New/releases/latest/download/images.zip"
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "amos_capture.zip": {
+    "date_added": "2026-02-17",
+    "date_updated": "2026-02-17",
+    "md5": "1bcc2e221a68a982595fbd8113d7c335",
+    "release_id": "latest",
+    "size": 2255870
+  },
+  "amos_fetcher.zip": {
+    "date_added": "2026-02-17",
+    "date_updated": "2026-02-17",
+    "md5": "de9ed39aadc1b9119a41848c58906f75",
+    "release_id": "latest",
+    "size": 2203144
+  },
+  "amos_playtime.zip": {
+    "date_added": "2026-02-17",
+    "date_updated": "2026-02-17",
+    "md5": "70b17157251181428ab2c2447ebba1c5",
+    "release_id": "latest",
+    "size": 2195913
+  },
+  "gameinfo.zip": {
+    "date_added": "2026-02-17",
+    "date_updated": "2026-02-17",
+    "md5": "9ab77e01591e4afa2e1842b855d755c6",
+    "release_id": "latest",
+    "size": 69845
+  },
+  "images.000.zip": {
+    "date_added": "2026-02-17",
+    "date_updated": "2026-02-17",
+    "md5": "dfdfd4ea32bb20c161c5db775046de25",
+    "release_id": "latest",
+    "size": 69040
+  }
+}

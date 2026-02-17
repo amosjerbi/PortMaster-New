@@ -1,5 +1,5 @@
 #!/bin/bash
-# PORTMASTER: fetcher.zip, fetcher.sh
+# PORTMASTER: amos_fetcher.zip, fetcher.sh
 
 XDG_DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
 
@@ -22,7 +22,7 @@ source $controlfolder/control.txt
 get_controls
 
 # Directory setup
-GAMEDIR=/$directory/ports/fetcher
+GAMEDIR=/$directory/ports/amos_fetcher
 CONFDIR="$GAMEDIR/conf/"
 mkdir -p "$GAMEDIR/conf"
 

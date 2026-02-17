@@ -2,7 +2,7 @@
 # ROCKNIX Screenshot Hotkey Service
 # Runs in background, press SELECT+R1 to capture screenshot
 
-CAPTURE_DIR="/storage/roms/ports/capture"
+CAPTURE_DIR="/storage/roms/ports/amos_capture"
 DAEMON="$CAPTURE_DIR/hotkey_daemon.py"
 
 case "$1" in

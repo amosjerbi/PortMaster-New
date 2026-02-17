@@ -1,5 +1,5 @@
 #!/bin/bash
-# PORTMASTER: playtime.zip, playtime.sh
+# PORTMASTER: amos_playtime.zip, playtime.sh
 
 XDG_DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
 
@@ -22,7 +22,7 @@ source $controlfolder/control.txt
 get_controls
 
 # Directory setup
-GAMEDIR=/$directory/ports/playtime
+GAMEDIR=/$directory/ports/amos_playtime
 CONFDIR="$GAMEDIR/conf/"
 mkdir -p "$GAMEDIR/conf"
 

@@ -89,13 +89,13 @@ python3 downloader.py pico-8 "file" # Download file
 ### Remote Testing (ROCKNIX)
 ```bash
 sshpass -p "rocknix" ssh -o StrictHostKeyChecking=no root@YOUR_IP_ADDRESS
-cd /storage/roms/ports/fetcher
+cd /storage/roms/ports/amos_fetcher
 python3 fetcher.py pico-8
 ```
 
 ### Syncing Changes
 ```bash
-sshpass -p "rocknix" scp fetcher.py downloader.py root@YOUR_IP_ADDRESS:/storage/roms/ports/fetcher/
+sshpass -p "rocknix" scp fetcher.py downloader.py root@YOUR_IP_ADDRESS:/storage/roms/ports/amos_fetcher/
 ```
 
 ## Cache

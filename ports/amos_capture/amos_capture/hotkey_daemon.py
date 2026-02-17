@@ -23,7 +23,7 @@ from datetime import datetime
 GAMEPAD_DEVICE = "/dev/input/event3"
 SCREENSHOT_DIR = "/storage/roms/screenshots"
 RECORDING_DIR = "/storage/roms/recordings"
-CAPTURE_SCRIPT = "/storage/roms/ports/capture/capture.py"
+CAPTURE_SCRIPT = "/storage/roms/ports/amos_capture/capture.py"
 PID_FILE = "/tmp/capture_hotkey.pid"
 CONFIG_FILE = "/tmp/capture_hotkey.conf"
 LOG_FILE = "/tmp/capture_hotkey.log"

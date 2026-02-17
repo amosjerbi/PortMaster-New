@@ -1,13 +1,13 @@
 {
   "version": 2,
-  "name": "fetcher.zip",
-  "items": ["fetcher.sh", "fetcher/"],
+  "name": "amos_fetcher.zip",
+  "items": ["fetcher.sh", "amos_fetcher/"],
   "items_opt": null,
   "attr": {
     "title": "Fetcher",
     "desc": "Download games you own from platform you choose",
     "inst": "Ready to run.",
-    "genres": ["tool"],
+    "genres": ["other"],
     "porter": ["Amos Jerbi"],
     "image": {},
     "rtr": true,

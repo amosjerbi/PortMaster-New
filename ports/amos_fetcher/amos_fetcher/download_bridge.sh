@@ -14,7 +14,7 @@ echo ""
 mkdir -p "/storage/roms/$PLATFORM_FOLDER"
 
 # Launch Python downloader with platform pre-selected
-cd /storage/roms/ports/fetcher
+cd /storage/roms/ports/amos_fetcher
 export PYTHONPATH="./lib:$PYTHONPATH"
 
 # Create a simple file list fetcher
@@ -51,7 +51,7 @@ try:
     print('')
     print('Use SSH to download specific files:')
     print('ssh root@192.168.0.159')
-    print('cd /storage/files/ports/fetcher') 
+    print('cd /storage/files/ports/amos_fetcher') 
     print('python3 download.py')
     
 except Exception as e:

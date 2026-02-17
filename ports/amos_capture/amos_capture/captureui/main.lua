@@ -383,7 +383,7 @@ end
 
 function startCapture()
     local mode = modes[gameState.selectedMode]
-    local captureDir = os.getenv("LOVEDIR") or "/storage/roms/ports/capture"
+    local captureDir = os.getenv("LOVEDIR") or "/storage/roms/ports/amos_capture"
 
     -- Handle hotkey daemon commands
     if mode.command == "hotkey_screenshot" then

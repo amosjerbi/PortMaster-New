@@ -1,21 +1,17 @@
--- ROM Playtime Viewer
+-- Interactive File Downloader with Fast Loading
 local push = require('push')
 local timer = require('timer')
 local osk = require('osk')
 
-local gameWidth, gameHeight = 640, 480
-local windowWidth, windowHeight = 640, 480
+local gameWidth, gameHeight = 720, 480
+local windowWidth, windowHeight = 720, 480
 
--- Load platforms dynamically from rom_index.py
+-- Load platforms dynamically from fetcher.py
 local platforms = {}
 
-function loadPlatforms(forceRefresh)
-    -- Execute ROM indexer
-    local command = "cd /storage/roms/ports/playtime && python3 rom_index.py --platforms"
-    if forceRefresh then
-        command = command .. " --refresh"
-    end
-    command = command .. " > /tmp/platforms.json 2>&1"
+function loadPlatforms()
+    -- Execute platform fetcher
+    local command = "cd /storage/roms/ports/amos_fetcher && python3 get_platforms.py > /tmp/platforms.json 2>&1"
     os.execute(command)
     
     -- Read the result
@@ -59,6 +55,7 @@ function loadPlatforms(forceRefresh)
     
     -- Fallback to hardcoded list if loading fails
     platforms = {
+        {name = "pico-8", folder = "pico-8"},
         {name = "Game Boy", folder = "gb"},
         {name = "Game Boy Color", folder = "gbc"},
         {name = "Game Boy Advance", folder = "gba"},
@@ -79,13 +76,6 @@ function loadPlatforms(forceRefresh)
     return false
 end
 
-function clearPlaytimeCache()
-    os.execute("rm -f /tmp/file_cache/playtime_lookup_cache.json")
-    if gameState ~= nil then
-        gameState.cachedPlaytimeTotal = "N/A"
-    end
-end
-
 local gameState = {
     screen = "platforms",
     selectedPlatform = 1,
@@ -94,17 +84,20 @@ local gameState = {
     fileScrollOffset = 0,
     maxVisible = 10,
     maxFilesVisible = 10,
+    downloadStatus = "",
     fileList = {},
     fileListLoaded = false,
     fileListLoading = false,
     searchQuery = "",
     filteredFileList = {},
     isSearching = false,
-    playtimeLoading = false,
-    playtimeStatus = "",
-    playtimeData = nil,
-    cachedPlaytimeTotal = nil,
-    -- Reserved for future features
+    -- Bulk download state
+    bulkDownloadActive = false,
+    bulkDownloadList = {},
+    bulkDownloadIndex = 0,
+    bulkDownloadTotal = 0,
+    bulkDownloadSuccess = 0,
+    bulkDownloadFailed = 0
 }
 
 -- Button hold state for continuous scrolling
@@ -118,10 +111,6 @@ local buttonHold = {
     repeatRate = 0.1    -- Time between repeats
 }
 
-local triggerState = {
-    r2 = false
-}
-
 function love.load()
     push:setupScreen(gameWidth, gameHeight, windowWidth, windowHeight, {
         fullscreen = true,
@@ -129,11 +118,8 @@ function love.load()
         pixelperfect = false
     })
     
-    -- Load platforms dynamically from rom_index.py
+    -- Load platforms dynamically from fetcher.py
     loadPlatforms()
-
-    -- Preload cached playtime total (best-effort)
-    updateCachedPlaytimeTotal()
     
     -- Initialize OSK
     osk.load()
@@ -156,14 +142,14 @@ function love.load()
         regular = {0.60, 0.60, 0.60} -- Medium gray text
     }
     -- Color palette 
-    bgColor = {0.239, 0.200, 0.616} -- dark purple background
-    footerColor = {0.149, 0.118, 0.412} -- darker purple for footer
-    titleColor = {1.000, 1.000, 1.000} -- white for titles
-    textColor = {0.478, 0.435, 0.835} -- light purple for regular text
-    selectedColor = {1.000, 1.000, 1.000} -- white for selected item text
-    progressBgColor = {0.478, 0.435, 0.835} -- light purple for progress bar background
-    selectionBgColor = {0.478, 0.435, 0.835} -- light purple for selected item background
-    selectionTextColor = {1.000, 1.000, 1.000} -- white text for selected item
+    bgColor = {0.776, 0.878, 0.020} -- Light green background
+    footerColor = {0.616, 0.741, 0.145} -- Darker green for footer
+    titleColor = {0.129, 0.259, 0.192} -- Dark green for titles
+    textColor = {0.129, 0.259, 0.192} -- Dark green for text
+    selectedColor = {0.129, 0.259, 0.192} -- Keep same for selections
+    progressBgColor = {0.25, 0.25, 0.25} -- Keep same for progress bar
+    selectionBgColor = {0.616, 0.741, 0.145} -- Light green background for selection
+    selectionTextColor = {0.129, 0.259, 0.192} -- Dark green text for selected
 end
 
 function love.update(dt)
@@ -182,21 +168,6 @@ function love.update(dt)
             elseif buttonHold.l1 then
                 gameState.selectedFile = math.max(1, gameState.selectedFile - 10)
                 updateFileScroll()
-            end
-        end
-    end
-
-    -- Handle continuous scrolling when holding shoulder buttons (platform list)
-    if (buttonHold.r1 or buttonHold.l1) and gameState.screen == "platforms" then
-        buttonHold.timer = buttonHold.timer + dt
-        if buttonHold.timer >= buttonHold.repeatRate then
-            buttonHold.timer = 0
-            if buttonHold.r1 then
-                gameState.selectedPlatform = math.min(#platforms, gameState.selectedPlatform + 10)
-                updateScroll()
-            elseif buttonHold.l1 then
-                gameState.selectedPlatform = math.max(1, gameState.selectedPlatform - 10)
-                updateScroll()
             end
         end
     end
@@ -245,8 +216,10 @@ function love.draw()
         drawPlatformScreen()
     elseif gameState.screen == "filelist" then
         drawFileListScreen()
-    elseif gameState.screen == "playtime" then
-        drawPlaytimeScreen()
+    elseif gameState.screen == "downloading" then
+        drawDownloadScreen()
+    elseif gameState.screen == "bulkdownload" then
+        drawBulkDownloadScreen()
     end
     
     -- Draw OSK overlay if visible
@@ -299,7 +272,7 @@ function drawMainScreen()
 
     love.graphics.setColor(textColor)
     love.graphics.setFont(titleFont)
-    love.graphics.printf("A: View ROMs | R2: Clear+Refresh | Start: Exit", 30, 400, gameWidth, 'left')
+    love.graphics.printf("Up/Down: Navigate | A: View Files | Start: Exit", 30, 400, gameWidth, 'left')
 
     local selectedPlatform = platforms[gameState.selectedPlatform]
     love.graphics.setColor(textColor)
@@ -341,12 +314,12 @@ function drawPlatformScreen()
     
     love.graphics.setColor(textColor)
     love.graphics.setFont(titleFont)
-    love.graphics.printf("A: View ROMs | R2: Clear Total | Start: Exit", 30, 400, gameWidth, 'left')
+    love.graphics.printf("Up/Down: Navigate | A: View Files | Start: Exit", 30, 400, gameWidth, 'left')
+    
     local selectedPlatform = platforms[gameState.selectedPlatform]
     love.graphics.setColor(textColor)
     love.graphics.setFont(titleFont)
-    local totalText = "Total (cached): " .. (gameState.cachedPlaytimeTotal or "N/A")
-    love.graphics.printf(totalText, 30, 442, gameWidth, 'left')
+    love.graphics.printf("Selected: " .. selectedPlatform.name, 30, 435, gameWidth, 'left')
 end
 
 function drawFileListScreen()
@@ -366,14 +339,14 @@ function drawFileListScreen()
     if not gameState.fileListLoaded or #gameState.fileList == 0 then
         love.graphics.setColor(textColor)
         love.graphics.setFont(titleFont)
-        love.graphics.printf("Press A to load ROM list", 0, 100, gameWidth, 'center')
+        love.graphics.printf("Press A to fetch file names", 0, 100, gameWidth, 'center')
         -- Footer background
         love.graphics.setColor(footerColor)
         love.graphics.rectangle('fill', 0, 390, gameWidth, 90)
         
         love.graphics.setColor(textColor)
         love.graphics.setFont(smallFont)
-        love.graphics.printf("A: Load ROMs | B: Back to platforms", 0, 400, gameWidth, 'center')
+        love.graphics.printf("A: Fetch Files | B: Back to platforms", 0, 400, gameWidth, 'center')
         return
     end
     
@@ -382,8 +355,8 @@ function drawFileListScreen()
     love.graphics.setFont(titleFont)
     local currentList = gameState.isSearching and gameState.filteredFileList or gameState.fileList
     local combinedTitle = gameState.isSearching and 
-        string.format("%s - Found %d/%d ROMs", platform.name, #gameState.filteredFileList, #gameState.fileList) or
-        string.format("%s - Found %d ROMs", platform.name, #gameState.fileList)
+        string.format("%s - Found %d/%d Files", platform.name, #gameState.filteredFileList, #gameState.fileList) or
+        string.format("%s - Found %d Files", platform.name, #gameState.fileList)
     love.graphics.printf(combinedTitle, 30, 25, gameWidth, 'left')
     
     -- Show search query if searching
@@ -432,10 +405,14 @@ function drawFileListScreen()
     love.graphics.setColor(textColor)
     love.graphics.setFont(titleFont)
     local controlsText
-    if gameState.isSearching then
-        controlsText = "A: Playtime | X: Search | Y: Clear | B: Back"
+    if gameState.bulkDownloadActive then
+        controlsText = "Bulk downloading... Please wait"
+    elseif gameState.isSearching and #gameState.filteredFileList > 1 then
+        controlsText = "A: Download | L1: Bulk Download All | X: Search | Y: Clear | B: Back"
+    elseif gameState.isSearching then
+        controlsText = "A: Download | X: Search | Y: Clear | B: Back"
     else
-        controlsText = "L1/R1: Scroll 10 items | A: Playtime | X: Search | B: Back"
+        controlsText = "L1/R1: Scroll 10 items | A: Download | X: Search | B: Back"
     end
     love.graphics.printf(controlsText, 30, 400, gameWidth, 'left')
 
@@ -453,62 +430,104 @@ function drawFileListScreen()
     end
 end
 
-function drawPlaytimeScreen()
-    love.graphics.setColor(titleColor)
+function drawDownloadScreen()
+    love.graphics.setColor(textColor)
     love.graphics.setFont(titleFont)
-    love.graphics.printf("PLAYTIME", 0, 40, gameWidth, 'center')
-
+    love.graphics.printf("DOWNLOADING File", 0, 50, gameWidth, 'center')
+    
     local platform = platforms[gameState.selectedPlatform]
     love.graphics.setColor(textColor)
     love.graphics.setFont(headerFont)
-    love.graphics.printf("Platform: " .. platform.name, 0, 90, gameWidth, 'center')
-
+    love.graphics.printf("Platform: " .. platform.name, 0, 100, gameWidth, 'center')
+    
     local currentList = gameState.isSearching and gameState.filteredFileList or gameState.fileList
     if gameState.selectedFile <= #currentList then
         local file = currentList[gameState.selectedFile]
+        love.graphics.setColor(textColor)
+        love.graphics.setFont(titleFont)
         local fileName = file.name
         if string.len(fileName) > 40 then
             fileName = string.sub(fileName, 1, 37) .. "..."
         end
-        love.graphics.setColor(textColor)
-        love.graphics.setFont(titleFont)
-        love.graphics.printf("ROM: " .. fileName, 0, 120, gameWidth, 'center')
+        love.graphics.printf("File: " .. fileName, 0, 130, gameWidth, 'center')
     end
+    
+    love.graphics.setColor(textColor)
+    love.graphics.setFont(titleFont)
+    love.graphics.printf(gameState.downloadStatus, 0, 180, gameWidth, 'center')
+    
+end
 
-    if gameState.playtimeLoading then
-        love.graphics.setColor(textColor)
-        love.graphics.setFont(titleFont)
-        love.graphics.printf(gameState.playtimeStatus, 0, 180, gameWidth, 'center')
-    elseif gameState.playtimeData then
-        local data = gameState.playtimeData
-        local lines = {
-            "Title: " .. (data.title or "Unknown"),
-            "Estimated: " .. (data.estimated and (string.format("%.1f hrs", data.estimated)) or "N/A"),
-            "Main: " .. (data.main and (string.format("%.1f hrs", data.main)) or "N/A"),
-            "Main+Extra: " .. (data.extra and (string.format("%.1f hrs", data.extra)) or "N/A"),
-            "Completionist: " .. (data.completionist and (string.format("%.1f hrs", data.completionist)) or "N/A"),
-            "Source: " .. (data.source or "unknown")
-        }
-        love.graphics.setColor(textColor)
-        love.graphics.setFont(titleFont)
-        local startY = 170
-        for i, line in ipairs(lines) do
-            love.graphics.printf(line, 0, startY + (i - 1) * 26, gameWidth, 'center')
+function drawBulkDownloadScreen()
+    love.graphics.setColor(titleColor)
+    love.graphics.setFont(titleFont)
+    love.graphics.printf("BULK DOWNLOADING FileS", 0, 30, gameWidth, 'center')
+    
+    local platform = platforms[gameState.selectedPlatform]
+    love.graphics.setColor(titleColor)
+    love.graphics.setFont(headerFont)
+    love.graphics.printf("Platform: " .. platform.name, 0, 70, gameWidth, 'center')
+    
+    -- Progress info
+    love.graphics.setColor(titleColor)
+    love.graphics.setFont(titleFont)
+    local progressText = string.format("Progress: %d / %d Files", gameState.bulkDownloadIndex, gameState.bulkDownloadTotal)
+    love.graphics.printf(progressText, 0, 110, gameWidth, 'center')
+    
+    -- Success/Failed counts
+    love.graphics.setColor(textColor)
+    love.graphics.setFont(titleFont)
+    local successText = string.format("Success: %d  Failed: %d", gameState.bulkDownloadSuccess, gameState.bulkDownloadFailed)
+    love.graphics.printf(successText, 0, 140, gameWidth, 'center')
+    
+    -- Progress bar
+    local barWidth = 400
+    local barHeight = 20
+    local barX = (gameWidth - barWidth) / 2
+    local barY = 170
+    
+    -- Background bar
+    love.graphics.setColor(footerColor)
+    love.graphics.rectangle('fill', barX, barY, barWidth, barHeight)
+    
+    -- Progress bar
+    if gameState.bulkDownloadTotal > 0 then
+        local progress = gameState.bulkDownloadIndex / gameState.bulkDownloadTotal
+        love.graphics.setColor(selectionBgColor) -- Use dark green for progress bar
+        love.graphics.rectangle('fill', barX, barY, barWidth * progress, barHeight)
+    end
+    
+    -- Current File being downloaded
+    if gameState.bulkDownloadIndex > 0 and gameState.bulkDownloadIndex <= #gameState.bulkDownloadList then
+        local currentRom = gameState.bulkDownloadList[gameState.bulkDownloadIndex]
+        if currentRom then
+            love.graphics.setColor(textColor)
+            love.graphics.setFont(titleFont)
+            local fileName = currentRom.name
+            if string.len(fileName) > 50 then
+                fileName = string.sub(fileName, 1, 47) .. "..."
+            end
+            love.graphics.printf("Current: " .. fileName, 0, 210, gameWidth, 'center')
         end
-    else
-        love.graphics.setColor(textColor)
-        love.graphics.setFont(titleFont)
-        love.graphics.printf(gameState.playtimeStatus ~= "" and gameState.playtimeStatus or "No playtime data available.", 0, 180, gameWidth, 'center')
     end
-
+    
+    -- Status
+    love.graphics.setColor(titleColor)
+    love.graphics.setFont(titleFont)
+    love.graphics.printf(gameState.downloadStatus, 0, 250, gameWidth, 'center')
+    
     -- Footer background
     love.graphics.setColor(footerColor)
     love.graphics.rectangle('fill', 0, 390, gameWidth, 90)
-
+    
     -- Controls
-    love.graphics.setColor(textColor)
+    love.graphics.setColor(titleColor)
     love.graphics.setFont(titleFont)
-    love.graphics.printf("B to return to list | Start: Exit", 0, 410, gameWidth, 'center')
+    if gameState.bulkDownloadActive then
+        love.graphics.printf("Downloading... Press B to cancel", 0, 410, gameWidth, 'center')
+    else
+        love.graphics.printf("Press B to return to File list", 0, 410, gameWidth, 'center')
+    end
 end
 
 function love.keypressed(key)
@@ -536,8 +555,6 @@ function love.keypressed(key)
                 fetchRomList()
             elseif key == "backspace" then
                 gameState.screen = "platforms"
-            elseif key == "escape" then
-                love.event.quit()
             end
         else
             -- Don't handle input if OSK is visible
@@ -554,22 +571,27 @@ function love.keypressed(key)
                 gameState.selectedFile = math.min(#currentList, gameState.selectedFile + 1)
                 updateFileScroll()
             elseif key == "return" or key == "space" then
-                openPlaytimeScreen()
+                startRomDownloadReal()
             elseif key == "x" then
                 showSearchKeyboard()
             elseif key == "y" and gameState.isSearching then
                 clearSearch()
+            elseif key == "l" and gameState.isSearching and #gameState.filteredFileList > 1 then
+                startBulkDownload()
             elseif key == "backspace" then
                 gameState.screen = "platforms"
-            elseif key == "escape" then
-                love.event.quit()
             end
         end
-    elseif gameState.screen == "playtime" then
+    elseif gameState.screen == "downloading" then
         if key == "backspace" then
             gameState.screen = "filelist"
-        elseif key == "escape" then
-            love.event.quit()
+        end
+    elseif gameState.screen == "bulkdownload" then
+        if key == "backspace" then
+            if gameState.bulkDownloadActive then
+                cancelBulkDownload()
+            end
+            gameState.screen = "filelist"
         end
     end
 end
@@ -605,59 +627,26 @@ function love.gamepadpressed(joystick, button)
             buttonHold.timer = -buttonHold.repeatDelay  -- Negative to add initial delay
         end
     elseif button == "rightshoulder" then
-        -- R1: Skip 10 items down in File list or platform list
-        if gameState.screen == "platforms" then
-            gameState.selectedPlatform = math.min(#platforms, gameState.selectedPlatform + 10)
-            updateScroll()
-            buttonHold.r1 = true
-            buttonHold.timer = -buttonHold.repeatDelay  -- Negative to add initial delay
-        elseif gameState.screen == "filelist" and gameState.fileListLoaded then
+        -- R1: Skip 10 items down in File list
+        if gameState.screen == "filelist" and gameState.fileListLoaded then
             local currentList = gameState.isSearching and gameState.filteredFileList or gameState.fileList
             gameState.selectedFile = math.min(#currentList, gameState.selectedFile + 10)
             updateFileScroll()
             buttonHold.r1 = true
             buttonHold.timer = -buttonHold.repeatDelay  -- Negative to add initial delay
         end
-    elseif button == "righttrigger" then
-        -- R2: Clear cached playtime total and refresh platforms
-        if gameState ~= nil and gameState.screen == "platforms" then
-            clearPlaytimeCache()
-            loadPlatforms(true)
-            updateCachedPlaytimeTotal()
-            gameState.selectedPlatform = 1
-            gameState.scrollOffset = 0
-        end
     elseif button == "leftshoulder" then
-        -- L1: Skip 10 items up in platform list or File list
-        if gameState.screen == "platforms" then
-            gameState.selectedPlatform = math.max(1, gameState.selectedPlatform - 10)
-            updateScroll()
-            buttonHold.l1 = true
-            buttonHold.timer = -buttonHold.repeatDelay  -- Negative to add initial delay
-        elseif gameState.screen == "filelist" and gameState.fileListLoaded then
-            local currentList = gameState.isSearching and gameState.filteredFileList or gameState.fileList
-            gameState.selectedFile = math.max(1, gameState.selectedFile - 10)
-            updateFileScroll()
-            buttonHold.l1 = true
-            buttonHold.timer = -buttonHold.repeatDelay  -- Negative to add initial delay
-        end
-    end
-end
-
-function love.gamepadaxis(joystick, axis, value)
-    -- Some controllers expose triggers as axes instead of buttons
-    if axis == "triggerright" or axis == "righttrigger" then
-        if value > 0.6 and not triggerState.r2 then
-            if gameState ~= nil and gameState.screen == "platforms" then
-                clearPlaytimeCache()
-                loadPlatforms(true)
-                updateCachedPlaytimeTotal()
-                gameState.selectedPlatform = 1
-                gameState.scrollOffset = 0
+        -- L1: Skip 10 items up in File list OR bulk download when searching
+        if gameState.screen == "filelist" and gameState.fileListLoaded then
+            if gameState.isSearching and #gameState.filteredFileList > 1 then
+                startBulkDownload()
+            else
+                local currentList = gameState.isSearching and gameState.filteredFileList or gameState.fileList
+                gameState.selectedFile = math.max(1, gameState.selectedFile - 10)
+                updateFileScroll()
+                buttonHold.l1 = true
+                buttonHold.timer = -buttonHold.repeatDelay  -- Negative to add initial delay
             end
-            triggerState.r2 = true
-        elseif value < 0.2 then
-            triggerState.r2 = false
         end
     end
 end
@@ -692,39 +681,6 @@ function updateFileScroll()
         gameState.fileScrollOffset = math.max(0, gameState.selectedFile - 1)
     elseif gameState.selectedFile > gameState.fileScrollOffset + gameState.maxFilesVisible then
         gameState.fileScrollOffset = gameState.selectedFile - gameState.maxFilesVisible
-    end
-end
-
-function updateCachedPlaytimeTotal()
-    local file = io.open("/tmp/file_cache/playtime_lookup_cache.json", "r")
-    if not file then
-        gameState.cachedPlaytimeTotal = "N/A"
-        return
-    end
-
-    local content = file:read("*all")
-    file:close()
-
-    if not content or content == "" then
-        gameState.cachedPlaytimeTotal = "N/A"
-        return
-    end
-
-    local total = 0
-    local count = 0
-
-    for hours in content:gmatch('"main"%s*:%s*([%d%.]+)') do
-        local val = tonumber(hours)
-        if val then
-            total = total + val
-            count = count + 1
-        end
-    end
-
-    if count == 0 then
-        gameState.cachedPlaytimeTotal = "N/A"
-    else
-        gameState.cachedPlaytimeTotal = string.format("%.1f hrs (%d)", total, count)
     end
 end
 
@@ -767,6 +723,118 @@ function clearSearch()
     gameState.fileScrollOffset = 0
 end
 
+-- Start bulk download of all filtered Files
+function startBulkDownload()
+    if not gameState.isSearching or #gameState.filteredFileList == 0 then
+        return
+    end
+    
+    -- Initialize bulk download state
+    gameState.bulkDownloadActive = true
+    gameState.bulkDownloadList = {}
+    gameState.bulkDownloadIndex = 0
+    gameState.bulkDownloadTotal = #gameState.filteredFileList
+    gameState.bulkDownloadSuccess = 0
+    gameState.bulkDownloadFailed = 0
+    
+    -- Copy filtered Files to bulk download list
+    for _, file in ipairs(gameState.filteredFileList) do
+        table.insert(gameState.bulkDownloadList, file)
+    end
+    
+    -- Switch to bulk download screen
+    gameState.screen = "bulkdownload"
+    gameState.downloadStatus = "Preparing bulk download of " .. gameState.bulkDownloadTotal .. " Files..."
+    
+    -- Start downloading the first File
+    timer.after(1, function()
+        downloadNextRom()
+    end)
+end
+
+-- Download the next File in the bulk list
+function downloadNextRom()
+    if not gameState.bulkDownloadActive then
+        return
+    end
+    
+    gameState.bulkDownloadIndex = gameState.bulkDownloadIndex + 1
+    
+    if gameState.bulkDownloadIndex > gameState.bulkDownloadTotal then
+        -- All downloads complete
+        completeBulkDownload()
+        return
+    end
+    
+    local file = gameState.bulkDownloadList[gameState.bulkDownloadIndex]
+    local platform = platforms[gameState.selectedPlatform]
+    
+    gameState.downloadStatus = string.format("Downloading File %d/%d...\n%s", 
+        gameState.bulkDownloadIndex, gameState.bulkDownloadTotal, file.name)
+    
+    -- Execute File download
+    local command = string.format("cd /storage/roms/ports/amos_fetcher && python3 downloader.py '%s' '%s' > /tmp/bulk_download_result_%d.json 2>&1 &", 
+        platform.name, file.filename, gameState.bulkDownloadIndex)
+    os.execute(command)
+    
+    -- Monitor this download
+    timer.after(2, function()
+        monitorBulkDownload(gameState.bulkDownloadIndex)
+    end)
+end
+
+-- Monitor individual File download in bulk
+function monitorBulkDownload(romIndex)
+    if not gameState.bulkDownloadActive or romIndex ~= gameState.bulkDownloadIndex then
+        return
+    end
+    
+    -- Check result file
+    local resultFile = io.open("/tmp/bulk_download_result_" .. romIndex .. ".json", "r")
+    if resultFile then
+        local content = resultFile:read("*all")
+        resultFile:close()
+        
+        if content and content ~= "" then
+            if content:match('"status": "success"') then
+                gameState.bulkDownloadSuccess = gameState.bulkDownloadSuccess + 1
+            else
+                gameState.bulkDownloadFailed = gameState.bulkDownloadFailed + 1
+            end
+            
+            -- Clean up result file
+            os.execute("rm -f /tmp/bulk_download_result_" .. romIndex .. ".json")
+            
+            -- Download next File
+            timer.after(0.5, function()
+                downloadNextRom()
+            end)
+            return
+        end
+    end
+    
+    -- Still downloading, check again
+    timer.after(2, function()
+        monitorBulkDownload(romIndex)
+    end)
+end
+
+-- Complete bulk download
+function completeBulkDownload()
+    gameState.bulkDownloadActive = false
+    gameState.downloadStatus = string.format(
+        "Bulk download complete!\n\nSuccess: %d Files\nFailed: %d Files\n\nPress B to continue", 
+        gameState.bulkDownloadSuccess, gameState.bulkDownloadFailed)
+end
+
+-- Cancel bulk download
+function cancelBulkDownload()
+    gameState.bulkDownloadActive = false
+    gameState.downloadStatus = "Bulk download cancelled"
+    -- Clean up any remaining result files
+    os.execute("rm -f /tmp/bulk_download_result_*.json")
+end
+
 function enterRomList()
     gameState.screen = "filelist"
     gameState.fileListLoaded = false
@@ -787,8 +855,8 @@ function fetchRomList()
     gameState.fileListLoading = true
     gameState.fileListLoaded = false
     
-    -- Execute ROM indexer for this platform
-    local command = string.format("cd /storage/roms/ports/playtime && python3 rom_index.py --files '%s' > /tmp/file_list.json 2>&1 &", platform.name)
+    -- Execute fast File fetcher
+    local command = string.format("cd /storage/roms/ports/amos_fetcher && python3 fetcher.py '%s' > /tmp/file_list.json 2>&1 &", platform.name)
     os.execute(command)
     
     -- Start monitoring for results sooner
@@ -803,7 +871,7 @@ function loadRomListResults()
         local content = file:read("*all")
         file:close()
         
-        if content and content ~= "" then
+        if content and content ~= "" and not content:match("Fetching Files") then
             gameState.fileList = {}
             
             -- Parse JSON content for real File names
@@ -830,13 +898,13 @@ function loadRomListResults()
                 elseif line:match('"error"') then
                     -- Handle error case
                     gameState.fileList = {}
-                    table.insert(gameState.fileList, {name = "Error loading ROMs", filename = ""})
+                    table.insert(gameState.fileList, {name = "Error fetching Files", filename = ""})
                     break
                 end
             end
             
             -- If we got real File data, mark as loaded
-            if #gameState.fileList > 0 and gameState.fileList[1].name ~= "Error loading ROMs" then
+            if #gameState.fileList > 0 and gameState.fileList[1].name ~= "Error fetching Files" then
                 gameState.fileListLoaded = true
                 gameState.fileListLoading = false
             else
@@ -859,65 +927,74 @@ function loadRomListResults()
     end
 end
 
-function openPlaytimeScreen()
+function startRomDownloadReal()
     local currentList = gameState.isSearching and gameState.filteredFileList or gameState.fileList
     if gameState.selectedFile <= #currentList then
+        gameState.screen = "downloading"
+        local file = currentList[gameState.selectedFile]
+        gameState.downloadStatus = "Preparing to download:\n" .. file.name .. "\n\nThis feature connects to GitHub\nand downloads the selected File."
+    end
+end
+
+-- Execute real File download
+function startRomDownloadReal()
+    local currentList = gameState.isSearching and gameState.filteredFileList or gameState.fileList
+    if gameState.selectedFile <= #currentList then
+        gameState.screen = "downloading"
         local file = currentList[gameState.selectedFile]
         local platform = platforms[gameState.selectedPlatform]
 
-        gameState.screen = "playtime"
-        gameState.playtimeLoading = true
-        gameState.playtimeStatus = "Loading playtime data..."
-        gameState.playtimeData = nil
-
-        os.execute("rm -f /tmp/playtime_result.json")
-        local command = string.format("cd /storage/roms/ports/playtime && python3 playtime.py --playtime '%s' '%s' > /tmp/playtime_result.json 2>&1 &", platform.name, file.filename)
+        gameState.downloadStatus = "Starting download...\n" .. file.name .. "\n\nConnecting to GitHub..."
+        
+        -- Execute real File download
+        local command = string.format("cd /storage/roms/ports/amos_fetcher && python3 downloader.py '%s' '%s' > /tmp/file_download_result.json 2>&1 &", platform.name, file.filename)
         os.execute(command)
-
+        
+        -- Start monitoring download progress
         timer.after(1, function()
-            loadPlaytimeResult()
+            monitorDownloadProgress()
         end)
     end
 end
 
-function loadPlaytimeResult()
-    local file = io.open("/tmp/playtime_result.json", "r")
-    if file then
-        local content = file:read("*all")
-        file:close()
-
+-- Monitor real download progress
+function monitorDownloadProgress()
+    -- Check progress file
+    local progress_file = io.open("/tmp/file_download_progress.json", "r")
+    if progress_file then
+        local content = progress_file:read("*all")
+        progress_file:close()
+        
         if content and content ~= "" then
-            local status = content:match('"status"%s*:%s*"([^"]+)"')
-            if status == "success" then
-                local title = content:match('"title"%s*:%s*"([^"]+)"') or "Unknown"
-                local source = content:match('"source"%s*:%s*"([^"]+)"') or "unknown"
-                local estimated = tonumber(content:match('"estimated_hours"%s*:%s*([%d%.]+)'))
-                local main = tonumber(content:match('"main"%s*:%s*([%d%.]+)'))
-                local extra = tonumber(content:match('"extra"%s*:%s*([%d%.]+)'))
-                local completionist = tonumber(content:match('"completionist"%s*:%s*([%d%.]+)'))
-
-                gameState.playtimeData = {
-                    title = title,
-                    source = source,
-                    estimated = estimated,
-                    main = main,
-                    extra = extra,
-                    completionist = completionist
-                }
-                gameState.playtimeLoading = false
-        gameState.playtimeStatus = "Playtime data loaded"
-        updateCachedPlaytimeTotal()
-        return
-            elseif status == "not_found" then
-                gameState.playtimeLoading = false
-                gameState.playtimeStatus = "No playtime data found for this game."
-                return
+            -- Parse progress (simplified)
+            if content:match('"status": "starting"') then
+                gameState.downloadStatus = "Initializing download...\nConnecting to GitHub..."
+            elseif content:match('"status": "downloading"') then
+                local percent = tonumber(content:match('"percent": (%d+)')) or 0
+                local downloaded_mb = tonumber(content:match('"downloaded_mb": ([%d%.]+)')) or 0
+                local total_mb = tonumber(content:match('"total_mb": ([%d%.]+)')) or 0
+                
+                gameState.downloadStatus = string.format("Downloading... %d%%\n%.1f MB / %.1f MB\n\nSaving to /storage/roms/%s/", 
+                    percent, downloaded_mb, total_mb, platforms[gameState.selectedPlatform].folder)
+            elseif content:match('"status": "success"') then
+                local size_mb = tonumber(content:match('"size_mb": ([%d%.]+)')) or 0
+                local folder = platforms[gameState.selectedPlatform].folder
+                
+                gameState.downloadStatus = string.format("Download Complete!\n\nFile saved to:\n/storage/roms/%s/\n\nSize: %.1f MB\n\nPress B to continue", 
+                    folder, size_mb)
+                return -- Stop monitoring
+            elseif content:match('"error"') then
+                local error_msg = content:match('"error": "([^"]+)"') or "Unknown error"
+                gameState.downloadStatus = "❌ Download Failed!\n\n" .. error_msg .. "\n\nPress B to try again"
+                return -- Stop monitoring
             end
         end
+    else
+        gameState.downloadStatus = "Preparing download...\nInitializing connection..."
     end
-
-    -- Still loading, check again
+    
+    -- Continue monitoring
     timer.after(1, function()
-        loadPlaytimeResult()
+        monitorDownloadProgress()
     end)
 end

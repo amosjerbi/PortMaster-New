@@ -1,5 +1,5 @@
 #!/bin/bash
-# PORTMASTER: capture.zip, capture.sh
+# PORTMASTER: amos_capture.zip, capture.sh
 # ROCKNIX Screen Capture - Screenshot & Video Recording
 
 XDG_DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
@@ -22,9 +22,9 @@ source $controlfolder/control.txt 2>/dev/null || directory="roms"
 
 # Directory setup - use storage path directly if directory var not set
 if [ -z "$directory" ]; then
-    GAMEDIR="/storage/roms/ports/capture"
+    GAMEDIR="/storage/roms/ports/amos_capture"
 else
-    GAMEDIR="/$directory/ports/capture"
+    GAMEDIR="/$directory/ports/amos_capture"
 fi
 
 CONFDIR="$GAMEDIR/conf/"
